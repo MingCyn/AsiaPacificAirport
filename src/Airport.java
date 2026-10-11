@@ -1,105 +1,134 @@
-public class Airport {
-    private static final int MAX_GROUND_CAPACITY = 3;
-    private static final int TOTAL_GATES = 3;
+import java.util.Random;
+import java.util.concurrent.Semaphore;
 
-    private int planesOnGround = 0;
-    private boolean runwayBusy = false;
-    private boolean[] gateAvailable = new boolean[]{true, true, true}; // 3 Gates
-    private boolean refuelTruckBusy = false; // Only 1 refueling truck
+public class Airport {
+    // 3 Ground Permits with Fairness enabled (FIFO)
+    private final Semaphore groundCapacity = new Semaphore(3, true);
+    // 1 Runway Permit (Mutex)
+    private final Semaphore runway = new Semaphore(1, true);
+    // 1 Refuel Truck Permit
+    private final Semaphore refuelTruck = new Semaphore(1, true);
+
+    private final boolean[] gateAvailable = new boolean[]{true, true, true};
+    private final Random rand = new Random();
 
     // 1. Request Landing
-    public synchronized int requestLanding(int planeId, boolean isEmergency) {
-        // Plane waits if ground is full, OR runway is busy, OR if a non-emergency plane is waiting while emergency is flagged
-        while (planesOnGround >= MAX_GROUND_CAPACITY || runwayBusy) {
-            if (planesOnGround >= MAX_GROUND_CAPACITY) {
-                System.out.println("ATC: Landing Permission Denied for Plane-" + planeId + ", Airport Full");
-            } else if (runwayBusy) {
-                System.out.println("ATC: Landing Permission Denied for Plane-" + planeId + ", Runway Busy");
-            }
+    public void requestLanding(Plane plane) {
+        System.out.println("Plane-" + plane.getPlaneId() + ": Requesting Landing");
 
+        if (plane.isEmergency()) {
+            System.out.println("Plane-" + plane.getPlaneId() + ": MAYDAY! Low fuel emergency landing!");
+        }
+
+        // Try to acquire ground capacity permit
+        if (!groundCapacity.tryAcquire()) {
+            System.out.println("ATC: Landing Permission Denied for Plane-" + plane.getPlaneId() + ", Airport Full");
             try {
-                wait(); // Wait for ground space or runway clear
+                groundCapacity.acquire(); // Blocks until a gate/ground permit opens up
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
 
-        // Reserve Runway & Ground Capacity
-        runwayBusy = true;
-        planesOnGround++;
+        // Acquire Runway permit
+        try {
+            runway.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
-        // Find available gate
-        int assignedGate = -1;
-        for (int i = 0; i < TOTAL_GATES; i++) {
-            if (gateAvailable[i]) {
-                assignedGate = i + 1; // Gate numbers: 1, 2, 3
-                gateAvailable[i] = false;
-                break;
+        // Assign Available Gate
+        synchronized (gateAvailable) {
+            for (int i = 0; i < 3; i++) {
+                if (gateAvailable[i]) {
+                    plane.setAssignedGate(i + 1);
+                    gateAvailable[i] = false;
+                    break;
+                }
             }
         }
 
-        if (isEmergency) {
-            System.out.println("Plane-" + planeId + ": MAYDAY! Low fuel emergency landing requested!");
-            System.out.println("ATC: EMERGENCY Landing granted for Plane-" + planeId);
-        } else {
-            System.out.println("Plane-" + planeId + ": Requesting Landing");
-            System.out.println("ATC: Landing permission granted for Plane-" + planeId);
+        System.out.println("ATC: Landing permission granted for Plane-" + plane.getPlaneId());
+        System.out.println("ATC: Gate-" + plane.getAssignedGate() + " assigned for Plane-" + plane.getPlaneId());
+        System.out.println("Plane-" + plane.getPlaneId() + ": Landing");
+    }
+
+    // 2. Coast and Dock
+    public void coastAndDock(Plane plane) {
+        try {
+            Thread.sleep(1000); // Landing roll
+        } catch (InterruptedException e) {}
+
+        runway.release(); // Runway is now free for other planes
+        System.out.println("Plane-" + plane.getPlaneId() + ": Coasting to Gate-" + plane.getAssignedGate());
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {}
+
+        System.out.println("Plane-" + plane.getPlaneId() + ": Docked at Gate-" + plane.getAssignedGate());
+    }
+
+    // 3. Disembark Passengers
+    public void disembarkPassengers(Plane plane) {
+        int passengersOut = rand.nextInt(40) + 10;
+        System.out.println("Plane-" + plane.getPlaneId() + "'s Passengers: " 
+                           + passengersOut + " disembarking out of Plane-" + plane.getPlaneId());
+        try {
+            Thread.sleep(1500);
+        } catch (InterruptedException e) {}
+    }
+
+    // 4. Refueling using Refuel Truck Semaphore (Only after disembarking)
+    public void refuelPlane(Plane plane) {
+        System.out.println("Plane-" + plane.getPlaneId() + ": Waiting for RefuelTruck at Gate-" + plane.getAssignedGate());
+        try {
+            refuelTruck.acquire(); // Acquire single truck permit
+            System.out.println("RefuelTruck: Refueling Plane-" + plane.getPlaneId() + " at Gate-" + plane.getAssignedGate());
+            Thread.sleep(2000); // Refueling time
+            System.out.println("RefuelTruck: Refueling complete for Plane-" + plane.getPlaneId());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            refuelTruck.release(); // Release truck permit for next plane
         }
+    }
+
+    // 5. Embark Passengers & Clean
+    public void embarkPassengersAndClean(Plane plane) {
+        int passengersIn = rand.nextInt(40) + 10;
+        System.out.println("Plane-" + plane.getPlaneId() + ": Refilling supplies and cleaning...");
+        System.out.println("Plane-" + plane.getPlaneId() + "'s Passengers: " 
+                           + passengersIn + " embarking onto Plane-" + plane.getPlaneId());
+        try {
+            Thread.sleep(1500);
+        } catch (InterruptedException e) {}
+    }
+
+    // 6. Request Takeoff
+    public void requestTakeoff(Plane plane) {
+        System.out.println("Plane-" + plane.getPlaneId() + ": Requesting Taking off");
+
+        try {
+            runway.acquire(); // Acquire Runway permit for takeoff
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        synchronized (gateAvailable) {
+            gateAvailable[plane.getAssignedGate() - 1] = true; // Free gate
+        }
+
+        System.out.println("ATC: Taking-off is granted for Plane-" + plane.getPlaneId() + ". Runway is free.");
+        System.out.println("Plane-" + plane.getPlaneId() + ": Undocking from Gate-" + plane.getAssignedGate() + " and taking off.");
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {}
+
+        System.out.println("Plane-" + plane.getPlaneId() + ": Taking off... Airborne!");
         
-        System.out.println("ATC: Gate-" + assignedGate + " assigned for Plane-" + planeId);
-        System.out.println("Plane-" + planeId + ": Landing");
-
-        return assignedGate;
-    }
-
-    // 2. Clear Runway after landing
-    public synchronized void clearRunwayAfterLanding(int planeId, int gateNo) {
-        runwayBusy = false;
-        System.out.println("Plane-" + planeId + ": Coasting to Gate-" + gateNo);
-        notifyAll(); // Signal other planes waiting to land/take off
-    }
-
-    // 3. Request Refueling Truck (1 Truck Shared)
-    public synchronized void acquireRefuelTruck(int planeId) {
-        while (refuelTruckBusy) {
-            try {
-                wait(); // Wait for truck to become free
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        refuelTruckBusy = true;
-        System.out.println("Plane-" + planeId + ": Refueling truck assigned and refueling started.");
-    }
-
-    public synchronized void releaseRefuelTruck(int planeId) {
-        refuelTruckBusy = false;
-        System.out.println("Plane-" + planeId + ": Refueling completed. Truck released.");
-        notifyAll(); // Signal other docked planes waiting for fuel
-    }
-
-    // 4. Request Take-Off Permission
-    public synchronized void requestTakeoff(int planeId, int gateNo) {
-        System.out.println("Plane-" + planeId + ": Requesting Taking off");
-        while (runwayBusy) {
-            try {
-                wait(); // Wait until runway clears
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        runwayBusy = true;
-        gateAvailable[gateNo - 1] = true; // Release gate
-        System.out.println("ATC: Taking-off is granted for Plane-" + planeId + ". Runway is free.");
-        System.out.println("Plane-" + planeId + ": Undocking from Gate-" + gateNo + " and coasting to runway");
-    }
-
-    // 5. Clear Runway after Take-Off
-    public synchronized void completeTakeoff(int planeId) {
-        System.out.println("Plane-" + planeId + ": Taking off... Airborne!");
-        planesOnGround--;
-        runwayBusy = false;
-        notifyAll(); // Wakes up planes waiting to land (Airport space freed up)
+        runway.release();         // Free Runway
+        groundCapacity.release(); // Free Ground/Gate capacity permit
     }
 }

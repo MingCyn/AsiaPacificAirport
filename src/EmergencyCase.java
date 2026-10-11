@@ -10,19 +10,22 @@ public class EmergencyCase implements Runnable {
 
     @Override
     public void run() {
-        // Total 6 planes attempting to land
         for (int i = 1; i <= 6; i++) {
-            // Plane-3 simulates the emergency low-fuel landing scenario
-            boolean isEmergency = (i == 3);
+            Plane plane;
 
-            Plane plane = new Plane(i, airport, isEmergency);
+            // Plane-3 simulates the emergency low fuel landing
+            if (i == 3) {
+                plane = new EmergencyPlane(i, airport);
+            } else {
+                plane = new PassengerPlane(i, airport);
+            }
+
             new Thread(plane).start();
 
             try {
-                // Random arrival interval: 0, 1, or 2 seconds (0 to 2000 ms)
+                // Arrival interval: 0, 1, or 2 seconds
                 Thread.sleep(rand.nextInt(3) * 1000);
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
                 break;
             }
         }

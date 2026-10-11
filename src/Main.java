@@ -3,9 +3,14 @@ public class Main {
         System.out.println("=== AIRPORT ATC SIMULATION STARTED ===\n");
 
         Airport airport = new Airport();
-        
-        // Use EmergencyCase instead of PlaneGenerator
-        Thread simulationThread = new Thread(new EmergencyCase(airport));
-        simulationThread.start();
+
+        // Start Truck Thread
+        Thread truckThread = new Thread(new RefuelTruck(airport));
+        truckThread.setDaemon(true);
+        truckThread.start();
+
+        // Start Simulation Thread
+        Thread simulation = new Thread(new EmergencyCase(airport));
+        simulation.start();
     }
 }
