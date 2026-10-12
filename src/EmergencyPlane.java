@@ -7,8 +7,12 @@ public class EmergencyPlane extends Plane {
     public void run() {
         airport.requestLanding(this);
         airport.coastAndDock(this);
+        
         airport.disembarkPassengers(this);
-        airport.refuelPlane(this);
+        
+        // FIX: Change refuelPlane(this) to requestRefueling(this)
+        airport.requestRefueling(this); 
+        
         airport.embarkPassengersAndClean(this);
         airport.requestTakeoff(this);
     }

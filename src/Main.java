@@ -1,6 +1,6 @@
 public class Main {
     public static void main(String[] args) {
-        System.out.println("=== AIRPORT ATC SIMULATION STARTED ===\n");
+        System.out.println("=== ASIA PACIFIC AIRPORT ===\n");
 
         Airport airport = new Airport();
 

@@ -8,16 +8,12 @@ public class PassengerPlane extends Plane {
         airport.requestLanding(this);
         airport.coastAndDock(this);
         
-        // Disembark passengers first
         airport.disembarkPassengers(this);
         
-        // Acquire refuel truck ONLY after disembarking
-        airport.refuelPlane(this);
+        // FIX: Change refuelPlane(this) to requestRefueling(this)
+        airport.requestRefueling(this); 
         
-        // Clean and embark passengers
         airport.embarkPassengersAndClean(this);
-        
-        // Takeoff
         airport.requestTakeoff(this);
     }
 }

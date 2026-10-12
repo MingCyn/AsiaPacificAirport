@@ -7,12 +7,24 @@ public class RefuelTruck implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("RefuelTruck Thread: Active and waiting for planes at gates.");
-        // Serves as a dedicated background worker thread
-        while (true) {
+        while (!Thread.currentThread().isInterrupted()) {
             try {
-                Thread.sleep(1000); 
+                // Truck thread waits for a plane that needs refueling
+                Plane plane = airport.truckGetNextTask();
+
+                // RefuelTruck ONLY outputs its own actions!
+                System.out.println("RefuelTruck: Driving to Gate-" + plane.getAssignedGate() 
+                                   + " for Plane-" + plane.getPlaneId());
+                
+                Thread.sleep(2000); // Refueling process
+
+                System.out.println("RefuelTruck: Refueling completed for Plane-" + plane.getPlaneId());
+
+                // Signal airport monitor that refueling is done
+                airport.truckFinishTask(plane);
+
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 break;
             }
         }
